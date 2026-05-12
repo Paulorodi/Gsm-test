@@ -13,7 +13,7 @@ SoftwareSerial sim800(10, 11);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // Replace with your number
-String phoneNumber = "+254792838297";
+String phoneNumber = "0792838297";
 
 void setup() {
 
