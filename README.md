@@ -13,7 +13,7 @@ For SIM800L:
 
 ---
 
-# 2. What You Will See on LCD
+#  What You Will See on LCD
 
 ## First Screen
 
@@ -37,7 +37,7 @@ Arduino is checking whether SIM800L responds.
 
 ---
 
-# 3. Check SIM800L LED
+# Check SIM800L LED
 
 Very important.
 
