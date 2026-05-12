@@ -1,0 +1,195 @@
+#include <SoftwareSerial.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// SIM800L connections 
+//Tumia hizi pins 
+// Arduino 10 = RX
+// Arduino 11 = TX
+
+SoftwareSerial sim800(10, 11);
+
+// LCD address 0x27 incase ikatae nishow i fix
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// Replace with your number
+String phoneNumber = "+254792838297";
+
+void setup() {
+
+  Serial.begin(9600);
+  sim800.begin(9600);
+
+  lcd.init();
+  lcd.backlight();
+
+  // Startup Screen
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Starting...");
+  
+  Serial.println("Starting SIM800L Test");
+
+  delay(5000);
+
+  // Test GSM Module
+  checkGSM();
+
+  // Enable direct SMS receiving
+  sim800.println("AT+CNMI=2,2,0,0,0");
+
+}
+
+void loop() {
+
+  // Read messages from SIM800L
+  if(sim800.available()) {
+
+    String data = sim800.readString();
+
+    Serial.println("================================");
+    Serial.println(data);
+    Serial.println("================================");
+
+    // Show SMS notification on LCD
+    if(data.indexOf("+CMT:") >= 0) {
+
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("New SMS");
+
+      delay(3000);
+
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("Waiting SMS");
+    }
+  }
+
+  // Send commands manually from Serial Monitor
+  if(Serial.available()) {
+
+    String command = Serial.readString();
+
+    sim800.println(command);
+  }
+
+}
+
+void checkGSM() {
+
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Testing GSM");
+
+  Serial.println("Testing GSM Module");
+
+  sim800.println("AT");
+
+  delay(2000);
+
+  if(sim800.available()) {
+
+    String response = sim800.readString();
+
+    Serial.println(response);
+
+    if(response.indexOf("OK") >= 0) {
+
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("GSM Connected");
+
+      Serial.println("GSM Connected Successfully");
+
+      delay(2000);
+
+      checkSignal();
+
+      sendSMS();
+
+    } else {
+
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("No Response");
+
+      Serial.println("No Proper Response");
+    }
+
+  } else {
+
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("No GSM Found");
+
+    Serial.println("SIM800L Not Found");
+  }
+}
+
+void checkSignal() {
+
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Checking Net");
+
+  sim800.println("AT+CSQ");
+
+  delay(2000);
+
+  if(sim800.available()) {
+
+    String signalData = sim800.readString();
+
+    Serial.println(signalData);
+
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Network Ready");
+
+    lcd.setCursor(0,1);
+    lcd.print("Signal OK");
+
+    delay(3000);
+  }
+}
+
+void sendSMS() {
+
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Sending SMS");
+
+  Serial.println("Sending SMS...");
+
+  sim800.println("AT+CMGF=1");
+
+  delay(1000);
+
+  sim800.print("AT+CMGS=\"");
+  sim800.print(phoneNumber);
+  sim800.println("\"");
+
+  delay(1000);
+
+  sim800.println("Hello from SIM800L Arduino Test");
+
+  delay(500);
+
+  // CTRL + Z
+  sim800.write(26);
+
+  delay(5000);
+
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("SMS Sent");
+
+  Serial.println("SMS SENT SUCCESSFULLY");
+
+  delay(3000);
+
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Waiting SMS");
+}
