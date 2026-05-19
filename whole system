@@ -1,0 +1,324 @@
+#include <SoftwareSerial.h>
+#include <DHT.h>
+#include <Wire.h>
+#include <Adafruit_SHT31.h>
+#include <LiquidCrystal_I2C.h>
+
+
+SoftwareSerial gsm(2, 3);
+
+
+#define DHTPIN 4
+#define DHTTYPE DHT22
+
+DHT dht(DHTPIN, DHTTYPE);
+
+
+Adafruit_SHT31 sht31 = Adafruit_SHT31();
+
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+
+int soilPin = A0;
+int relayPin = 7;
+
+
+int soilValue;
+
+float dhtTemp;
+float dhtHum;
+
+float shtTemp;
+float shtHum;
+
+bool autoMode = true;
+
+unsigned long previousMillis = 0;
+unsigned long lcdMillis = 0;
+
+long smsInterval = 60000;
+long lcdInterval = 3000;
+
+bool showFirstScreen = true;
+
+
+String phone = "+254790595643";
+
+
+void setup() {
+
+  Serial.begin(9600);
+  gsm.begin(9600);
+
+  pinMode(relayPin, OUTPUT);
+
+  
+  digitalWrite(relayPin, HIGH);
+
+  
+  dht.begin();
+
+  
+  if (!sht31.begin(0x44)) {
+
+    Serial.println("SHT31 not found");
+
+    lcd.init();
+    lcd.backlight();
+
+    lcd.setCursor(0, 0);
+    lcd.print("SHT31 ERROR");
+
+    while (1);
+  }
+
+  
+  lcd.init();
+  lcd.backlight();
+
+  lcd.setCursor(0, 0);
+  lcd.print("Irrigation Sys");
+
+  lcd.setCursor(0, 1);
+  lcd.print("Starting...");
+
+  delay(2000);
+
+
+  gsm.println("AT");
+  delay(1000);
+
+  gsm.println("AT+CMGF=1");
+  delay(1000);
+
+  gsm.println("AT+CNMI=1,2,0,0,0");
+}
+
+
+void sendSMS(String msg) {
+
+  gsm.println("AT+CMGF=1");
+  delay(100);
+
+  gsm.println("AT+CMGS=\"" + phone + "\"");
+  delay(100);
+
+  gsm.print(msg);
+  delay(100);
+
+  gsm.write(26);
+
+  delay(3000);
+}
+
+
+void loop() {
+
+  
+  soilValue = analogRead(soilPin);
+
+  
+  dhtTemp = dht.readTemperature();
+  dhtHum = dht.readHumidity();
+
+  
+  shtTemp = sht31.readTemperature();
+  shtHum = sht31.readHumidity();
+
+  
+  if (autoMode) {
+
+    if (soilValue > 900) {
+
+      
+      digitalWrite(relayPin, LOW);
+    }
+    else {
+
+      
+      digitalWrite(relayPin, HIGH);
+    }
+  }
+
+  unsigned long currentMillis = millis();
+
+  
+  if (currentMillis - lcdMillis >= lcdInterval) {
+
+    lcdMillis = currentMillis;
+
+    showFirstScreen = !showFirstScreen;
+
+    lcd.clear();
+  }
+
+  
+  if (showFirstScreen) {
+
+    lcd.setCursor(0, 0);
+    lcd.print("DHT:");
+    lcd.print(dhtTemp);
+    lcd.print("C ");
+
+    lcd.print((int)dhtHum);
+    lcd.print("%");
+
+    lcd.setCursor(0, 1);
+
+    if (autoMode) {
+      lcd.print("AUTO ");
+    }
+    else {
+      lcd.print("MANUAL ");
+    }
+
+    lcd.print("S:");
+    lcd.print(soilValue);
+  }
+
+  
+  else {
+
+    lcd.setCursor(0, 0);
+    lcd.print("SHT:");
+    lcd.print(shtTemp);
+    lcd.print("C ");
+
+    lcd.print((int)shtHum);
+    lcd.print("%");
+
+    lcd.setCursor(0, 1);
+
+    if (digitalRead(relayPin) == LOW) {
+      lcd.print("Pump:ON ");
+    }
+    else {
+      lcd.print("Pump:OFF");
+    }
+  }
+
+  
+  if (gsm.available()) {
+
+    String sms = gsm.readString();
+
+    sms.toUpperCase();
+
+    
+    if (sms.indexOf("AUTO") != -1) {
+
+      autoMode = true;
+
+      sendSMS("System set to AUTO mode");
+    }
+
+    
+    else if (sms.indexOf("MANUAL") != -1) {
+
+      autoMode = false;
+
+      sendSMS("System set to MANUAL mode");
+    }
+
+    
+    else if (sms.indexOf("ON") != -1) {
+
+      digitalWrite(relayPin, LOW);
+
+      sendSMS("Pump turned ON");
+    }
+
+    
+    else if (sms.indexOf("OFF") != -1) {
+
+      digitalWrite(relayPin, HIGH);
+
+      sendSMS("Pump turned OFF");
+    }
+
+    
+    else if (sms.indexOf("STATUS") != -1) {
+
+      String msg =
+
+        "IRRIGATION STATUS\n\n" +
+
+        "Soil: " + String(soilValue) +
+
+        "\n\nDHT22" +
+        "\nTemp: " + String(dhtTemp) +
+        " C" +
+        "\nHum: " + String(dhtHum) +
+        " %" +
+
+        "\n\nSHT31" +
+        "\nTemp: " + String(shtTemp) +
+        " C" +
+        "\nHum: " + String(shtHum) +
+        " %";
+
+      
+      if (autoMode) {
+        msg += "\nMode: AUTO";
+      }
+      else {
+        msg += "\nMode: MANUAL";
+      }
+
+      
+      if (digitalRead(relayPin) == LOW) {
+        msg += "\nPump: ON";
+      }
+      else {
+        msg += "\nPump: OFF";
+      }
+
+      sendSMS(msg);
+    }
+  }
+
+  
+  if (currentMillis - previousMillis >= smsInterval) {
+
+    previousMillis = currentMillis;
+
+    String msg =
+
+      "AUTO UPDATE\n\n" +
+
+      "Soil: " + String(soilValue) +
+
+      "\n\nDHT22" +
+      "\nTemp: " + String(dhtTemp) +
+      " C" +
+      "\nHum: " + String(dhtHum) +
+      " %" +
+
+      "\n\nSHT31" +
+      "\nTemp: " + String(shtTemp) +
+      " C" +
+      "\nHum: " + String(shtHum) +
+      " %";
+
+    
+    if (autoMode) {
+      msg += "\nMode: AUTO";
+    }
+    else {
+      msg += "\nMode: MANUAL";
+    }
+
+  
+    if (digitalRead(relayPin) == LOW) {
+      msg += "\nPump: ON";
+    }
+    else {
+      msg += "\nPump: OFF";
+    }
+
+    sendSMS(msg);
+  }
+
+  delay(500);
+}
